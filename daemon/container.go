@@ -101,8 +101,9 @@ type Container struct {
 	Volumes map[string]string
 	// Store rw/ro in a separate structure to preserve reverse-compatibility on-disk.
 	// Easier than migrating older container configs :)
-	VolumesRW  map[string]bool
-	hostConfig *runconfig.HostConfig
+	VolumesRW     map[string]bool
+	VolumesShared map[string]bool
+	hostConfig    *runconfig.HostConfig
 
 	activeLinks  map[string]*links.Link
 	monitor      *containerMonitor
@@ -923,6 +924,7 @@ func (container *Container) Export() (archive.Archive, error) {
 }
 
 func (container *Container) Mount() error {
+	fmt.Fprintf(os.Stderr, "Called func (container *Container) Mount() error\n")
 	return container.daemon.Mount(container)
 }
 

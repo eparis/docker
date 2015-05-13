@@ -101,11 +101,13 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string) error {
 		if err := os.MkdirAll(dest, 0755); err != nil && !os.IsExist(err) {
 			return err
 		}
+		fmt.Fprintf(os.Stderr, "mountToRootfs proc/sysfs for %s\n", dest)
 		return syscall.Mount(m.Source, dest, m.Device, uintptr(m.Flags), "")
 	case "mqueue":
 		if err := os.MkdirAll(dest, 0755); err != nil && !os.IsExist(err) {
 			return err
 		}
+		fmt.Fprintf(os.Stderr, "mountToRootfs mqueue for %s\n", dest)
 		if err := syscall.Mount(m.Source, dest, m.Device, uintptr(m.Flags), ""); err != nil {
 			return err
 		}
@@ -117,6 +119,7 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string) error {
 				return err
 			}
 		}
+		fmt.Fprintf(os.Stderr, "mountToRootfs tmpfs for %s\n", dest)
 		if err := syscall.Mount(m.Source, dest, m.Device, uintptr(m.Flags), data); err != nil {
 			return err
 		}
@@ -130,6 +133,7 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string) error {
 		if err := os.MkdirAll(dest, 0755); err != nil && !os.IsExist(err) {
 			return err
 		}
+		fmt.Fprintf(os.Stderr, "mountToRootfs devpts for %s\n", dest)
 		return syscall.Mount(m.Source, dest, m.Device, uintptr(m.Flags), data)
 	case "bind":
 		stat, err := os.Stat(m.Source)
@@ -151,10 +155,13 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string) error {
 		if err := createIfNotExists(dest, stat.IsDir()); err != nil {
 			return err
 		}
+		fmt.Fprintf(os.Stderr, "priv=%x shared=%x slave=%x\n", syscall.MS_PRIVATE, syscall.MS_SHARED, syscall.MS_SLAVE)
+		fmt.Fprintf(os.Stderr, "s=%s d=%s f=%x\n", m.Source, dest, uintptr(m.Flags))
 		if err := syscall.Mount(m.Source, dest, m.Device, uintptr(m.Flags), data); err != nil {
 			return err
 		}
-		if m.Flags&syscall.MS_RDONLY != 0 {
+		if m.Flags&syscall.MS_RDONLY|syscall.MS_SHARED != 0 {
+			fmt.Fprintf(os.Stderr, "s=%s d=%s f=%x\n", m.Source, dest, uintptr(m.Flags|syscall.MS_REMOUNT))
 			if err := syscall.Mount(m.Source, dest, m.Device, uintptr(m.Flags|syscall.MS_REMOUNT), ""); err != nil {
 				return err
 			}
@@ -165,6 +172,7 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string) error {
 			}
 		}
 		if m.Flags&syscall.MS_PRIVATE != 0 {
+			fmt.Fprintf(os.Stderr, "s=%s d=%s f=%x\n", m.Source, dest, syscall.MS_PRIVATE)
 			if err := syscall.Mount("", dest, "none", uintptr(syscall.MS_PRIVATE), ""); err != nil {
 				return err
 			}
@@ -311,6 +319,7 @@ func createDeviceNode(rootfs string, node *configs.Device, bind bool) error {
 		if f != nil {
 			f.Close()
 		}
+		fmt.Fprintf(os.Stderr, "createDeviceNode s=%s d=%s f=%x\n", node.Path, dest, syscall.MS_BIND)
 		return syscall.Mount(node.Path, dest, "bind", syscall.MS_BIND, "")
 	}
 	if err := mknodDevice(dest, node); err != nil {
@@ -341,11 +350,13 @@ func mknodDevice(dest string, node *configs.Device) error {
 func prepareRoot(config *configs.Config) error {
 	flag := syscall.MS_SLAVE | syscall.MS_REC
 	if config.Privatefs {
-		flag = syscall.MS_PRIVATE | syscall.MS_REC
+		flag = flag | syscall.MS_PRIVATE
 	}
+	fmt.Fprintf(os.Stderr, "prepareRoot devpts for %s\n", "/")
 	if err := syscall.Mount("", "/", "", uintptr(flag), ""); err != nil {
 		return err
 	}
+	fmt.Fprintf(os.Stderr, "prepareRoot devpts for %s\n", config.Rootfs)
 	return syscall.Mount(config.Rootfs, config.Rootfs, "bind", syscall.MS_BIND|syscall.MS_REC, "")
 }
 
@@ -390,7 +401,11 @@ func pivotRoot(rootfs, pivotBaseDir string) error {
 	if err := syscall.Unmount(pivotDir, syscall.MNT_DETACH); err != nil {
 		return fmt.Errorf("unmount pivot_root dir %s", err)
 	}
-	return os.Remove(pivotDir)
+
+	if err := os.Remove(pivotDir); err != nil {
+		return fmt.Errorf("Remove pivotDir %s", err)
+	}
+	return syscall.Mount("/", "/", "", syscall.MS_SHARED, "")
 }
 
 func msMoveRoot(rootfs string) error {
@@ -425,6 +440,7 @@ func createIfNotExists(path string, isDir bool) error {
 
 // remountReadonly will bind over the top of an existing path and ensure that it is read-only.
 func remountReadonly(path string) error {
+	fmt.Fprintf(os.Stderr, "remountReadonly for %s\n", path)
 	for i := 0; i < 5; i++ {
 		if err := syscall.Mount("", path, "", syscall.MS_REMOUNT|syscall.MS_RDONLY, ""); err != nil && !os.IsNotExist(err) {
 			switch err {
@@ -449,6 +465,7 @@ func remountReadonly(path string) error {
 // maskFile bind mounts /dev/null over the top of the specified path inside a container
 // to avoid security issues from processes reading information from non-namespace aware mounts ( proc/kcore ).
 func maskFile(path string) error {
+	fmt.Fprintf(os.Stderr, "maskFile for %s\n", path)
 	if err := syscall.Mount("/dev/null", path, "", syscall.MS_BIND, ""); err != nil && !os.IsNotExist(err) {
 		return err
 	}

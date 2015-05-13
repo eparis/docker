@@ -1,6 +1,8 @@
 package mount
 
 import (
+	"fmt"
+	"os"
 	"time"
 )
 
@@ -31,6 +33,7 @@ func Mounted(mountpoint string) (bool, error) {
 // specified like the mount or fstab unix commands: "opt1=val1,opt2=val2". See
 // flags.go for supported option flags.
 func Mount(device, target, mType, options string) error {
+	fmt.Fprintf(os.Stderr, "Called func Mount(device, target, mType, options string) error\n")
 	flag, _ := parseOptions(options)
 	if flag&REMOUNT != REMOUNT {
 		if mounted, err := Mounted(target); err != nil || mounted {

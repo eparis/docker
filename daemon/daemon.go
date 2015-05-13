@@ -974,6 +974,7 @@ func (daemon *Daemon) Shutdown() error {
 }
 
 func (daemon *Daemon) Mount(container *Container) error {
+	fmt.Fprintf(os.Stderr, "called func (daemon *Daemon) Mount(container *Container) error\n")
 	dir, err := daemon.driver.Get(container.ID, container.GetMountLabel())
 	if err != nil {
 		return fmt.Errorf("Error getting container %s from driver %s: %s", container.ID, daemon.driver, err)

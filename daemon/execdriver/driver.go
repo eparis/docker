@@ -126,6 +126,7 @@ type Mount struct {
 	Writable    bool   `json:"writable"`
 	Private     bool   `json:"private"`
 	Slave       bool   `json:"slave"`
+	Shared      bool   `json:"shared"`
 }
 
 // Describes a process that will be run inside a container.

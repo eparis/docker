@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"syscall"
 
@@ -15,6 +16,8 @@ import (
 	"github.com/docker/libcontainer/devices"
 	"github.com/docker/libcontainer/utils"
 )
+
+var _ = os.Stderr
 
 // createContainer populates and configures the container type with the
 // data provided by the execdriver.Command
@@ -235,6 +238,10 @@ func (d *driver) setupMounts(container *configs.Config, c *execdriver.Command) e
 		}
 		if m.Slave {
 			flags |= syscall.MS_SLAVE
+		}
+		if m.Shared {
+			flags |= syscall.MS_SHARED
+			fmt.Fprintf(os.Stderr, "Calling with MS_SHARED\n")
 		}
 		container.Mounts = append(container.Mounts, &configs.Mount{
 			Source:      m.Source,

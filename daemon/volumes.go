@@ -19,6 +19,7 @@ type volumeMount struct {
 	containerPath string
 	hostPath      string
 	writable      bool
+	shared        bool
 	copyData      bool
 	from          string
 }
@@ -27,6 +28,7 @@ func (container *Container) prepareVolumes() error {
 	if container.Volumes == nil || len(container.Volumes) == 0 {
 		container.Volumes = make(map[string]string)
 		container.VolumesRW = make(map[string]bool)
+		container.VolumesShared = make(map[string]bool)
 	}
 
 	if len(container.hostConfig.VolumesFrom) > 0 && container.AppliedVolumesFrom == nil {
@@ -118,6 +120,10 @@ func (container *Container) createVolumes() error {
 		}
 
 		container.VolumesRW[mnt.containerPath] = mnt.writable
+		container.VolumesShared[mnt.containerPath] = mnt.shared
+		if mnt.shared {
+			fmt.Fprintf(os.Stderr, "setting container.VolumesShared\n")
+		}
 		container.Volumes[mnt.containerPath] = v.Path
 		v.AddContainer(container.ID)
 		if mnt.from != "" {
@@ -184,6 +190,24 @@ func (container *Container) derefVolumes() {
 	}
 }
 
+func parseMountMode(mnt *volumeMount, mode string) error {
+	modes := strings.Split(mode, ",")
+	for _, m := range modes {
+		switch m {
+		case "ro":
+			mnt.writable = false
+		case "rw":
+			mnt.writable = true
+		case "S":
+			mnt.shared = true
+			fmt.Fprintf(os.Stderr, "Found a shared!\n")
+		default:
+			return fmt.Errorf("Invalid volume specification: %s", m)
+		}
+	}
+	return nil
+}
+
 func parseBindMountSpec(spec string) (*volumeMount, error) {
 	arr := strings.Split(spec, ":")
 
@@ -196,7 +220,10 @@ func parseBindMountSpec(spec string) (*volumeMount, error) {
 	case 3:
 		mnt.hostPath = arr[0]
 		mnt.containerPath = arr[1]
-		mnt.writable = validMountMode(arr[2]) && arr[2] == "rw"
+		err := parseMountMode(mnt, arr[2])
+		if err != nil {
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("Invalid volume specification: %s", spec)
 	}
@@ -265,7 +292,11 @@ func (container *Container) setupMounts() error {
 			Source:      container.Volumes[path],
 			Destination: path,
 			Writable:    container.VolumesRW[path],
+			Shared:      container.VolumesShared[path],
 		})
+		if container.VolumesShared[path] {
+			fmt.Fprintf(os.Stderr, "setting Shared: true!\n")
+		}
 	}
 
 	mounts = append(mounts, container.specialMounts()...)
